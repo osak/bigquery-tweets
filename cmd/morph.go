@@ -38,11 +38,12 @@ func main() {
 	for i, tweet := range allTweets {
 		tokens := t.Tokenize(tweet.FullText)
 		entries[i] = bigquery.TweetEntry{
-			ID:        tweet.ID,
-			Timestamp: tweet.Timestamp.Time,
-			Source:    tweet.Source,
-			FullText:  tweet.FullText,
-			Tokens:    tokens,
+			ID:            tweet.ID,
+			InReplyToUser: tweet.InReplyToUser,
+			Source:        tweet.Source,
+			FullText:      tweet.FullText,
+			Tokens:        tokens,
+			Timestamp:     tweet.Timestamp.Time,
 		}
 	}
 	if err = saveEntries(params.outputPath, entries); err != nil {
@@ -53,19 +54,23 @@ func main() {
 	}
 }
 
+// saveEntries saves given entries as newline-delimited JSON.
 func saveEntries(path string, entries []bigquery.TweetEntry) error {
 	out, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("cannot open file '%s': %w", path, err)
 	}
-	defer out.Close()
 
 	w := json.NewEncoder(out)
-	err = w.Encode(entries)
-	if err != nil {
-		return fmt.Errorf("cannot write to file '%s': %w", path, err)
+	for _, entry := range entries {
+		if err := w.Encode(entry); err != nil {
+			return fmt.Errorf("cannot write entry (ID=%s): %w", entry.ID, err)
+		}
 	}
 
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("cannot properly close file: %w", err)
+	}
 	return nil
 }
 
@@ -74,13 +79,16 @@ func saveSchema(path string) error {
 	if err != nil {
 		return fmt.Errorf("cannot open file '%s': %w", path, err)
 	}
-	defer out.Close()
 
 	w := json.NewEncoder(out)
 	schema := bigquery.Schema()
 	err = w.Encode(schema)
 	if err != nil {
 		return fmt.Errorf("cannot write to file '%s': %w", path, err)
+	}
+
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("cannot properly close file: %w", err)
 	}
 	return nil
 }
